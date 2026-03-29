@@ -15,12 +15,20 @@ Architecture:
 """
 
 import json
+import os
 from dataclasses import dataclass
-from core.hybrid_retriever import (
-    hybrid_retrieve,
-    RetrievalConfig,
-    RetrievalMode,
-)
+
+LIGHTWEIGHT = os.environ.get("LIGHTWEIGHT_MODE", "false").lower() == "true"
+
+if LIGHTWEIGHT:
+    from core.sparse_retriever import search_bm25
+else:
+    from core.hybrid_retriever import (
+        hybrid_retrieve,
+        RetrievalConfig,
+        RetrievalMode,
+    )
+
 from core.llm import (
     generate_answer,
     TUTOR_SYSTEM_PROMPT,
@@ -44,33 +52,31 @@ class RAGResult:
     retrieval_info: dict  # metadata about retrieval strategy used
 
 
-# Default hybrid config
-HYBRID_CONFIG = RetrievalConfig(
-    mode=RetrievalMode.HYBRID,
-    sparse_top_k=15,
-    dense_top_k=15,
-    fusion_top_k=10,
-    final_top_k=5,
-    use_reranker=True,
-    rrf_k=60,
-    fusion_method="rrf",
-)
+# Default hybrid config (only used when not lightweight)
+if not LIGHTWEIGHT:
+    HYBRID_CONFIG = RetrievalConfig(
+        mode=RetrievalMode.HYBRID,
+        sparse_top_k=15, dense_top_k=15,
+        fusion_top_k=10, final_top_k=5,
+        use_reranker=True, rrf_k=60, fusion_method="rrf",
+    )
+else:
+    # Dummy so code doesn't crash on references
+    HYBRID_CONFIG = None
+    RetrievalConfig = None
 
 
 # ────────────────────────────────────────────
 # Main Retrieval Function
 # ────────────────────────────────────────────
 
-def retrieve_context(
-    user_id: int,
-    query: str,
-    config: RetrievalConfig = None,
-) -> list[dict]:
-    """
-    Hybrid retrieval: BM25 + Dense + RRF fusion + reranking.
-    """
-    config = config or HYBRID_CONFIG
-    return hybrid_retrieve(user_id, query, config)
+def retrieve_context(user_id: int, query: str, config=None) -> list[dict]:
+    """Retrieve chunks — BM25-only in production, hybrid locally."""
+    if LIGHTWEIGHT:
+        return search_bm25(user_id, query, top_k=5)
+    else:
+        config = config or HYBRID_CONFIG
+        return hybrid_retrieve(user_id, query, config)
 
 
 def build_context_prompt(chunks: list[dict]) -> str:
@@ -121,15 +127,15 @@ def format_sources(chunks: list[dict]) -> list[dict]:
     return sources
 
 
-def _build_retrieval_info(chunks: list[dict], config: RetrievalConfig) -> dict:
+def _build_retrieval_info(chunks: list[dict], config=None) -> dict:
     """Metadata about what retrieval strategy was used."""
+    if LIGHTWEIGHT:
+        return {"mode": "bm25_only", "chunks_retrieved": len(chunks)}
     return {
-        "mode": config.mode.value,
-        "fusion_method": config.fusion_method,
-        "reranker_used": config.use_reranker,
+        "mode": config.mode.value if config else "hybrid",
+        "fusion_method": config.fusion_method if config else "rrf",
+        "reranker_used": config.use_reranker if config else False,
         "chunks_retrieved": len(chunks),
-        "sparse_weight": config.sparse_weight,
-        "dense_weight": config.dense_weight,
     }
 
 
@@ -377,6 +383,27 @@ async def generate_quiz_tf(user_id: int, topic: str, count: int = 5) -> dict:
         "retrieval_info": _build_retrieval_info(chunks, HYBRID_CONFIG),
     }
 
+
+# ────────────────────────────────────────────
+# Socratic Mode
+# ────────────────────────────────────────────
+
+async def socratic_question(user_id: int, topic: str) -> RAGResult:
+    chunks = retrieve_context(user_id, topic)
+    if not chunks or not _chunks_are_relevant(chunks):
+        return _no_context_result("socratic")
+
+    context = build_context_prompt(chunks)
+    prompt = f"CONTEXT:\n{context}\n\nTOPIC:\n{topic}"
+    answer = await generate_answer(SOCRATIC_PROMPT, prompt)
+
+    return RAGResult(
+        answer=answer,
+        sources=format_sources(chunks),
+        confidence=_calc_confidence(chunks),
+        mode="socratic",
+        retrieval_info=_build_retrieval_info(chunks, HYBRID_CONFIG),
+    )
 
 
 # ────────────────────────────────────────────

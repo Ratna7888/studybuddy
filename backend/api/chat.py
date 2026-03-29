@@ -91,31 +91,6 @@ async def ask(req: QuestionRequest, user: User = Depends(get_current_user)):
         "retrieval_info": result.retrieval_info,
     }
 
-
-@router.post("/explain")
-async def explain(req: QuestionRequest, user: User = Depends(get_current_user)):
-    """Explain a topic simply."""
-    result = await explain_simply(user.id, req.question)
-    return {
-        "answer": result.answer,
-        "sources": result.sources,
-        "confidence": result.confidence,
-        "mode": result.mode,
-    }
-
-
-@router.post("/summarize")
-async def summarize(req: QuestionRequest, user: User = Depends(get_current_user)):
-    """Generate a structured summary."""
-    result = await generate_summary(user.id, req.question)
-    return {
-        "answer": result.answer,
-        "sources": result.sources,
-        "confidence": result.confidence,
-        "mode": result.mode,
-    }
-
-
 @router.post("/flashcards")
 async def flashcards(req: TopicRequest, user: User = Depends(get_current_user)):
     """Generate flashcards from a topic."""
@@ -135,31 +110,6 @@ async def quiz_tf(req: TopicRequest, user: User = Depends(get_current_user)):
     """Generate True/False quiz."""
     result = await generate_quiz_tf(user.id, req.topic, req.count)
     return result
-
-
-@router.post("/socratic")
-async def socratic(req: QuestionRequest, user: User = Depends(get_current_user)):
-    """Socratic questioning mode."""
-    result = await socratic_question(user.id, req.question)
-    return {
-        "answer": result.answer,
-        "sources": result.sources,
-        "confidence": result.confidence,
-        "mode": result.mode,
-    }
-
-
-@router.post("/teach-back")
-async def teach_back(req: TeachBackRequest, user: User = Depends(get_current_user)):
-    """Evaluate student's teach-back explanation."""
-    result = await evaluate_teach_back(user.id, req.topic, req.explanation)
-    return {
-        "answer": result.answer,
-        "sources": result.sources,
-        "confidence": result.confidence,
-        "mode": result.mode,
-    }
-
 
 @router.post("/concept-breakdown")
 async def concept_map(req: QuestionRequest, user: User = Depends(get_current_user)):

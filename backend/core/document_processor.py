@@ -3,6 +3,7 @@
 Supports: PDF, TXT, Markdown, DOCX — all using free libraries.
 """
 
+import os
 import uuid
 from pathlib import Path
 
@@ -10,9 +11,8 @@ import fitz  # PyMuPDF
 from docx import Document as DocxDocument
 
 from core.chunking import chunk_text, ChunkData
-from core.embeddings import generate_embeddings
-from core.vector_store import add_chunks
-from core.sparse_retriever import add_to_bm25
+
+LIGHTWEIGHT = os.environ.get("LIGHTWEIGHT_MODE", "false").lower() == "true"
 
 
 def parse_document(file_path: str, file_type: str) -> str:
@@ -83,11 +83,8 @@ async def process_document(
     if not chunks:
         raise ValueError("No meaningful chunks could be extracted.")
 
-    # Step 3: Generate embeddings
+    # Step 3: Generate chunk IDs and metadata
     chunk_texts = [c.text for c in chunks]
-    embeddings = generate_embeddings(chunk_texts)
-
-    # Step 4: Prepare IDs and metadata for ChromaDB
     chroma_ids = []
     metadatas = []
     for chunk in chunks:
@@ -97,21 +94,19 @@ async def process_document(
         chunk.metadata["chroma_id"] = cid
         metadatas.append(chunk.metadata)
 
-    # Step 5: Store in vector DB (dense index)
-    add_chunks(
-        user_id=user_id,
-        ids=chroma_ids,
-        texts=chunk_texts,
-        embeddings=embeddings,
-        metadatas=metadatas,
-    )
+    # Step 5: Store in indexes
+    if LIGHTWEIGHT:
+        from core.sparse_retriever import add_to_bm25
+        add_to_bm25(user_id=user_id, ids=chroma_ids, texts=chunk_texts, metadatas=metadatas)
+    else:
+        from core.embeddings import generate_embeddings
+        from core.vector_store import add_chunks
+        from core.sparse_retriever import add_to_bm25
 
-    # Step 6: Store in BM25 index (sparse index)
-    add_to_bm25(
-        user_id=user_id,
-        ids=chroma_ids,
-        texts=chunk_texts,
-        metadatas=metadatas,
-    )
+        # Dense index
+        embeddings = generate_embeddings(chunk_texts)
+        add_chunks(user_id=user_id, ids=chroma_ids, texts=chunk_texts, embeddings=embeddings, metadatas=metadatas)
+        # Sparse index
+        add_to_bm25(user_id=user_id, ids=chroma_ids, texts=chunk_texts, metadatas=metadatas)
 
     return chunks, chroma_ids
