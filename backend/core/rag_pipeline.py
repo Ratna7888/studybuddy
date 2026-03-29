@@ -220,10 +220,9 @@ async def ask_conversational(
 async def ask_question(
     user_id: int,
     question: str,
-    config: RetrievalConfig = None,
+    config=None,
 ) -> RAGResult:
-    """Direct Q&A with hybrid RAG grounding."""
-    config = config or HYBRID_CONFIG
+    """Direct Q&A with RAG grounding."""
     chunks = retrieve_context(user_id, question, config)
 
     if not chunks or not _chunks_are_relevant(chunks, question):
@@ -232,7 +231,7 @@ async def ask_question(
             sources=[],
             confidence="low",
             mode="qa",
-            retrieval_info=_build_retrieval_info([], config),
+            retrieval_info=_build_retrieval_info([]),
         )
 
     context = build_context_prompt(chunks)

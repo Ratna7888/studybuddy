@@ -1,5 +1,6 @@
 """Document upload, listing, and management routes."""
 
+import os
 import shutil
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
@@ -9,10 +10,10 @@ from sqlalchemy import select
 from db.database import get_db
 from models import User, Document, Chunk
 from api.auth import get_current_user
-from core.document_processor import process_document
-from core.vector_store import delete_document_chunks
 from core.sparse_retriever import remove_document_from_bm25
 from config import settings
+
+LIGHTWEIGHT = os.environ.get("LIGHTWEIGHT_MODE", "false").lower() == "true"
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -68,6 +69,7 @@ async def _process_document_task(
 ):
     """Background task: parse, chunk, embed, store."""
     from db.database import async_session
+    from core.document_processor import process_document
 
     async with async_session() as db:
         try:
@@ -187,8 +189,10 @@ async def delete_document(
     if not doc:
         raise HTTPException(404, "Document not found")
 
-    # Remove from vector store
-    delete_document_chunks(user.id, doc_id)
+    # Remove from vector store (only if not lightweight)
+    if not LIGHTWEIGHT:
+        from core.vector_store import delete_document_chunks
+        delete_document_chunks(user.id, doc_id)
 
     # Remove from BM25 index
     remove_document_from_bm25(user.id, doc_id)

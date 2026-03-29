@@ -25,7 +25,6 @@ async def _rebuild_all_bm25_indices():
     """Rebuild BM25 in-memory indices from DB on startup."""
     from models import User, Document
     from core.sparse_retriever import rebuild_bm25_index
-
     async with async_session() as db:
         # Find all users who have at least one ready document
         result = await db.execute(
@@ -56,7 +55,7 @@ app = FastAPI(
 # CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
