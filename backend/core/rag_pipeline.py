@@ -13,6 +13,9 @@ Architecture:
               ▼
           Context Assembly ──► Gemini LLM ──► Grounded Answer
 """
+"""
+Full RAG Pipeline with Hybrid Retrieval.
+"""
 
 import json
 import os
@@ -22,12 +25,6 @@ LIGHTWEIGHT = os.environ.get("LIGHTWEIGHT_MODE", "false").lower() == "true"
 
 if LIGHTWEIGHT:
     from core.sparse_retriever import search_bm25
-else:
-    from core.hybrid_retriever import (
-        hybrid_retrieve,
-        RetrievalConfig,
-        RetrievalMode,
-    )
 
 from core.llm import (
     generate_answer,
@@ -71,11 +68,17 @@ else:
 # ────────────────────────────────────────────
 
 def retrieve_context(user_id: int, query: str, config=None) -> list[dict]:
-    """Retrieve chunks — BM25-only in production, hybrid locally."""
     if LIGHTWEIGHT:
         return search_bm25(user_id, query, top_k=5)
     else:
-        config = config or HYBRID_CONFIG
+        from core.hybrid_retriever import hybrid_retrieve, RetrievalConfig, RetrievalMode
+        if config is None:
+            config = RetrievalConfig(
+                mode=RetrievalMode.HYBRID,
+                sparse_top_k=15, dense_top_k=15,
+                fusion_top_k=10, final_top_k=5,
+                use_reranker=True, rrf_k=60, fusion_method="rrf",
+            )
         return hybrid_retrieve(user_id, query, config)
 
 
