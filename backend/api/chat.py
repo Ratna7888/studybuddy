@@ -10,12 +10,9 @@ from api.auth import get_current_user
 from core.rag_pipeline import (
     ask_question,
     ask_conversational,
-    explain_simply,
-    generate_summary,
     generate_flashcards,
     generate_quiz_mcq,
     generate_quiz_tf,
-    evaluate_teach_back,
     concept_breakdown,
 )
 from core.hybrid_retriever import RetrievalConfig, RetrievalMode
@@ -40,10 +37,6 @@ class TopicRequest(BaseModel):
     count: int = 5
     retrieval_mode: str = "hybrid"
 
-class TeachBackRequest(BaseModel):
-    topic: str
-    explanation: str
-    retrieval_mode: str = "hybrid"
 
 
 def _get_config(mode_str: str) -> RetrievalConfig:
