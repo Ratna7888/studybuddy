@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: studybuddy-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./studybuddy.db
+      - key: CHROMA_PERSIST_DIR
+        value: ./chroma_data
+      - key: UPLOAD_DIR
+        value: ./uploads
+      - key: RETRIEVAL_MODE
+        value: hybrid

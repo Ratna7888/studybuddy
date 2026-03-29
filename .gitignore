@@ -1,0 +1,28 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.env
+
+# ── Database ──
+*.db
+*.sqlite3
+
+# ── Uploads & Data ──
+backend/uploads/
+backend/chroma_data/
+
+# ── Node ──
+node_modules/
+dist/
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ──
+.DS_Store
+Thumbs.db
