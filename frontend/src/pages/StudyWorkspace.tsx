@@ -11,6 +11,7 @@ import {
 
 interface ChatMessage { role: "user" | "assistant"; content: string; sources?: Source[]; confidence?: string }
 interface ChatSession { id: string; title: string; messages: ChatMessage[]; sources: Source[]; createdAt: number }
+interface ToolSession { id: string; type: ActiveView; title: string; data: any; sources: Source[]; createdAt: number }
 
 type ActiveView = "chat" | "flashcards" | "quiz_mcq" | "quiz_tf" | "concept_breakdown";
 
@@ -32,6 +33,10 @@ export default function StudyWorkspace() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Tool sessions history
+  const [toolSessions, setToolSessions] = useState<ToolSession[]>([]);
+  const [activeToolSessionId, setActiveToolSessionId] = useState<string | null>(null);
 
   // Study tools
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
@@ -63,14 +68,16 @@ export default function StudyWorkspace() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
-  // When switching to a tool, clear tool state
+  // When switching to a tool, clear tool state but NOT chat sessions
   useEffect(() => {
     if (view !== "chat") {
       setFlashcards([]); setQuizQuestions([]); setConceptData(null); setToolError(null);
       setQuizAnswers({}); setQuizSubmitted(false); setCardIndex(0); setFlipped(false);
       setSources([]);
     } else {
-      setSources(activeSession?.sources || []);
+      // Restore sources from active session
+      const s = sessions.find(s => s.id === activeSessionId);
+      setSources(s?.sources || []);
     }
   }, [view]);
 
@@ -103,6 +110,23 @@ export default function StudyWorkspace() {
   const toggleDoc = (id: number) => setSelectedDocIds(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const hasToolContent = flashcards.length > 0 || quizQuestions.length > 0 || conceptData || toolError;
 
+  const loadToolSession = (ts: ToolSession) => {
+    setView(ts.type);
+    setActiveToolSessionId(ts.id);
+    setSources(ts.sources);
+    setToolError(null);
+    setFlashcards([]); setQuizQuestions([]); setConceptData(null);
+    setQuizAnswers({}); setQuizSubmitted(false); setCardIndex(0); setFlipped(false);
+    if (ts.type === "flashcards") setFlashcards(ts.data.flashcards || []);
+    else if (ts.type === "quiz_mcq" || ts.type === "quiz_tf") setQuizQuestions(ts.data.questions || []);
+    else if (ts.type === "concept_breakdown") setConceptData(ts.data);
+  };
+
+  const deleteToolSession = (id: string) => {
+    setToolSessions(prev => prev.filter(s => s.id !== id));
+    if (activeToolSessionId === id) setActiveToolSessionId(null);
+  };
+
   const handleSubmit = async () => {
     if (!input.trim() || loading) return;
     if (selectedDocIds.size === 0) { toast.error("Select at least one document"); return; }
@@ -129,8 +153,8 @@ export default function StudyWorkspace() {
         const aMsg: ChatMessage = { role: "assistant", content: data.answer, sources: data.sources, confidence: data.confidence };
         updateSession(sid, { messages: [...updated, aMsg], sources: data.sources || [] });
         setSources(data.sources || []);
-        // Log session
-        progressAPI.logSession(query.slice(0, 60), "qa").catch(() => {});
+        const docName = data.sources?.[0]?.document_title || "";
+        progressAPI.logSession(query.slice(0, 60) + (docName ? ` [${docName}]` : ""), "qa").catch(() => {});
       } catch (err: any) {
         updateSession(sid, { messages: [...updated, { role: "assistant", content: "Something went wrong. Please try again." }] });
         toast.error(err.response?.data?.detail || "Request failed");
@@ -147,6 +171,9 @@ export default function StudyWorkspace() {
             setSources(data.sources || []);
             if (!data.error && data.flashcards?.length) {
               const docName = data.sources?.[0]?.document_title || "";
+              const ts: ToolSession = { id: genId(), type: "flashcards", title: query.slice(0, 40), data: { flashcards: data.flashcards }, sources: data.sources || [], createdAt: Date.now() };
+              setToolSessions(prev => [ts, ...prev]);
+              setActiveToolSessionId(ts.id);
               progressAPI.logFlashcards(query, data.flashcards.length).catch(() => {});
               progressAPI.logSession(query + (docName ? ` [${docName}]` : ""), "flashcards").catch(() => {});
             }
@@ -155,8 +182,11 @@ export default function StudyWorkspace() {
             data = (await chatAPI.quizMCQ(query, 5)).data;
             data.error ? setToolError(data.error) : setQuizQuestions(data.questions || []);
             setSources(data.sources || []);
-            if (!data.error) {
+            if (!data.error && data.questions?.length) {
               const docName = data.sources?.[0]?.document_title || "";
+              const ts: ToolSession = { id: genId(), type: "quiz_mcq", title: query.slice(0, 40), data: { questions: data.questions }, sources: data.sources || [], createdAt: Date.now() };
+              setToolSessions(prev => [ts, ...prev]);
+              setActiveToolSessionId(ts.id);
               progressAPI.logSession(query + (docName ? ` [${docName}]` : ""), "quiz_mcq").catch(() => {});
             }
             break;
@@ -164,8 +194,11 @@ export default function StudyWorkspace() {
             data = (await chatAPI.quizTF(query, 5)).data;
             data.error ? setToolError(data.error) : setQuizQuestions(data.questions || []);
             setSources(data.sources || []);
-            if (!data.error) {
+            if (!data.error && data.questions?.length) {
               const docName = data.sources?.[0]?.document_title || "";
+              const ts: ToolSession = { id: genId(), type: "quiz_tf", title: query.slice(0, 40), data: { questions: data.questions }, sources: data.sources || [], createdAt: Date.now() };
+              setToolSessions(prev => [ts, ...prev]);
+              setActiveToolSessionId(ts.id);
               progressAPI.logSession(query + (docName ? ` [${docName}]` : ""), "quiz_tf").catch(() => {});
             }
             break;
@@ -173,8 +206,11 @@ export default function StudyWorkspace() {
             data = (await chatAPI.conceptBreakdown(query)).data;
             data.error ? setToolError(data.error) : setConceptData(data);
             setSources(data.sources || []);
-            if (!data.error) {
+            if (!data.error && !data.error) {
               const docName = data.sources?.[0]?.document_title || "";
+              const ts: ToolSession = { id: genId(), type: "concept_breakdown", title: query.slice(0, 40), data: data, sources: data.sources || [], createdAt: Date.now() };
+              setToolSessions(prev => [ts, ...prev]);
+              setActiveToolSessionId(ts.id);
               progressAPI.logSession(query + (docName ? ` [${docName}]` : ""), "concepts").catch(() => {});
             }
             break;
@@ -234,6 +270,30 @@ export default function StudyWorkspace() {
             </button>
           ))}
         </div>
+
+        {/* Tool Session History */}
+        {toolSessions.length > 0 && (
+          <div style={{ borderTop: "1px solid var(--border)", padding: "10px 8px 0", marginTop: 4 }}>
+            <p style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 700, padding: "0 4px 6px" }}>History</p>
+            <div style={{ maxHeight: 160, overflowY: "auto" }}>
+              {toolSessions.slice(0, 10).map(ts => {
+                const tool = TOOLS.find(t => t.id === ts.type);
+                return (
+                  <div key={ts.id} onClick={() => loadToolSession(ts)} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6,
+                    cursor: "pointer", marginBottom: 1, fontSize: 11,
+                    background: activeToolSessionId === ts.id ? `${tool?.color || "var(--accent)"}18` : "transparent",
+                    color: activeToolSessionId === ts.id ? tool?.color || "var(--accent)" : "var(--text-muted)",
+                  }}>
+                    <span style={{ flexShrink: 0 }}>{tool?.icon}</span>
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ts.title}</span>
+                    <button onClick={e => { e.stopPropagation(); deleteToolSession(ts.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 1, opacity: 0.4 }}><Trash2 size={10} /></button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div style={{ flex: 1 }} />
 
