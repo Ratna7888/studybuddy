@@ -4,8 +4,12 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "http://studybuddy-gamma-virid.vercel.app/api/:path*"
+      "source": "/api/(.*)",
+      "destination": "http://studybuddy-gamma-virid.vercel.app/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
