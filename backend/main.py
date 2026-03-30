@@ -1,6 +1,7 @@
 """StudyBuddy AI — FastAPI Application Entry Point (Hybrid RAG)."""
 
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db.database import init_db, async_session
@@ -52,10 +53,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS for React frontend
+frontend_url = os.getenv("FRONTEND_URL")
+
+origins = [
+    "http://localhost:5173",
+]
+
+if frontend_url:
+    origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
