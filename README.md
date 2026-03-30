@@ -65,7 +65,6 @@ Query --> BM25 Search --> Retrieved Chunks --> Gemini LLM --> Grounded Answer
 * PostgreSQL database URL
 
 ### Backend
-
 ```bash
 cd backend
 python -m venv venv
@@ -77,11 +76,35 @@ uvicorn main:app --reload
 ```
 
 ### Frontend
-
 ```bash
 cd frontend
 npm install
 npm run dev
+```
+Open `http://localhost:5173` — backend runs on `http://localhost:8000`.
+
+---
+
+## Environment Variables
+
+### Create `backend/.env`:
+```env
+GEMINI_API_KEY=your_key_here
+JWT_SECRET=your_random_secret
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=60
+
+DATABASE_URL=postgresql+asyncpg://user:password@host:port/dbname
+
+FRONTEND_URL=http://localhost:5173
+
+# Optional: set true in production on Render
+LIGHTWEIGHT_MODE=false
+```
+
+### Create `frontend/.env`:
+```env
+VITE_API_URL=http://localhost:8000
 ```
 
 ---
@@ -89,23 +112,72 @@ npm run dev
 ## 🌍 Deployment
 
 ### Frontend (Vercel)
-
 * **Root Directory:** `frontend`
 * **Build Command:** `npm run build`
 * **Output Directory:** `dist`
 
-Set `VITE_API_URL=https://your-backend-url.onrender.com`
+**Set:**
+```env
+VITE_API_URL=https://your-backend-url.onrender.com
+```
 
 ### Backend (Render)
-
 * **Root Directory:** `backend`
 * **Build Command:** `pip install -r requirements-prod.txt`
 * **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
+**Set these environment variables on Render:**
+```env
+GEMINI_API_KEY=your_key_here
+JWT_SECRET=your_random_secret
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=60
+DATABASE_URL=postgresql+asyncpg://user:password@host:port/dbname
+FRONTEND_URL=https://your-frontend-url.vercel.app
+LIGHTWEIGHT_MODE=true
+```
+
 ---
 
-## 📝 License
+## Lightweight Production Mode
 
+The deployed version is optimized for low-memory environments such as Render free instances.
+
+**What changes in production:**
+
+| | Local Dev | Production (Render) |
+| :--- | :--- | :--- |
+| **Retrieval** | Hybrid pipeline | BM25 only |
+| **Memory Usage** | Higher | Lower |
+| **Dependencies** | `requirements.txt` | `requirements-prod.txt` |
+| **LIGHTWEIGHT_MODE** | `false` / unset | `true` |
+
+**In lightweight mode:**
+* Local embedding models are skipped
+* ChromaDB is skipped
+* Reranking is skipped
+* Retrieval uses only BM25
+* Gemini is still used for answer generation
+
+This makes deployment much more stable on small instances while still keeping document-grounded Q&A effective.
+
+---
+
+## Notes
+* First request may be slow due to Render cold start
+* Production uses **BM25-only retrieval** for memory efficiency
+* PostgreSQL is used in production with async SQLAlchemy
+* Make sure CORS is configured for your frontend domain
+* Use `requirements-prod.txt` on Render, not local dev requirements
+
+## Future Improvements
+* Re-enable hybrid retrieval on larger production instances
+* Flashcards and quiz generation
+* Streaming AI responses
+* Better UI/UX
+* Multi-document reasoning improvements
+
+## 📝 License
 MIT
 
 ---
