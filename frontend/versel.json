@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://studybuddy-api.onrender.com/api/:path*"
+      "destination": "http://studybuddy-gamma-virid.vercel.app/api/:path*"
     }
   ]
 }
