@@ -40,7 +40,7 @@ Query → Dense Retrieval ────┘
 
 **Production (Lightweight Mode):**
 
-```text
+```
 Query → BM25 Search → Retrieved Chunks → Gemini LLM → Grounded Answer
 ```
 
