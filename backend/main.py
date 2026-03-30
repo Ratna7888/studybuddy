@@ -60,7 +60,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # ── Register Routers ──
 from api.auth import router as auth_router
 from api.documents import router as documents_router
