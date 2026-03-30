@@ -1,4 +1,4 @@
-````markdown
+
 # 🎓 StudyBuddy AI
 
 A RAG-based personal tutor that answers **only** from your uploaded documents. Upload PDFs, DOCX, TXT, or Markdown files and study with AI-powered tools.
@@ -32,7 +32,7 @@ A RAG-based personal tutor that answers **only** from your uploaded documents. U
 ## Architecture
 
 **Local Development (Full Pipeline):**
-```text
+
 Query → BM25 Sparse Search ─┐
                              ├→ Reciprocal Rank Fusion → Gemini LLM → Grounded Answer
 Query → Dense Retrieval ────┘
