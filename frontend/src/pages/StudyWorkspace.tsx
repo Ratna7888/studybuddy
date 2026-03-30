@@ -386,7 +386,7 @@ export default function StudyWorkspace() {
             const topic = quizQuestions[0]?.topic || "General";
             const docName = sources.length > 0 ? sources[0].document_title : "";
             progressAPI.logQuiz(topic, isTF ? "tf" : "mcq", quizQuestions.length, correct, pct, quizQuestions, docName).catch(() => {});
-          }} />
+          }} />}
 
           {/* Empty states */}
           {!loading && view === "chat" && messages.length === 0 && (
