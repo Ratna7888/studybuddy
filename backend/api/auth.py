@@ -1,12 +1,13 @@
 """Authentication routes — register, login, JWT."""
 
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from jose import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from db.database import get_db
 from models import User
@@ -14,6 +15,7 @@ from config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
 
 
 # ── Schemas ──
@@ -23,9 +25,11 @@ class RegisterRequest(BaseModel):
     name: str
     password: str
 
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -50,9 +54,6 @@ def verify_token(token: str) -> dict:
 
 # ── Dependency: Get current user ──
 
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-security = HTTPBearer()
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
@@ -70,18 +71,22 @@ async def get_current_user(
 
 @router.post("/register", response_model=TokenResponse)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    # Check if email exists
-    existing = await db.execute(select(User).where(User.email == req.email))
+    email = req.email.lower().strip()
+    name = req.name.strip()
+
+    existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user = User(
-        email=req.email,
-        name=req.name,
+        email=email,
+        name=name,
         password_hash=pwd_context.hash(req.password),
     )
+
     db.add(user)
-    await db.flush()
+    await db.commit()
+    await db.refresh(user)
 
     token = create_token(user.id, user.email)
     return TokenResponse(
@@ -92,7 +97,9 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == req.email))
+    email = req.email.lower().strip()
+
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user or not pwd_context.verify(req.password, user.password_hash):
