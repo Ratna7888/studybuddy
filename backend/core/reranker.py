@@ -1,12 +1,20 @@
-"""Cross-encoder reranker for improving retrieval quality (free, local)."""
+"""Cross-encoder reranker for improving retrieval quality (free, local).
 
-from sentence_transformers import CrossEncoder
+Only loads when LIGHTWEIGHT_MODE is not enabled.
+"""
+
+import os
 from config import settings
+
+LIGHTWEIGHT = os.environ.get("LIGHTWEIGHT_MODE", "false").lower() == "true"
 
 _reranker = None
 
 
-def get_reranker() -> CrossEncoder:
+def get_reranker():
+    if LIGHTWEIGHT:
+        raise RuntimeError("Reranker not available in lightweight mode")
+    from sentence_transformers import CrossEncoder
     global _reranker
     if _reranker is None:
         print(f"Loading reranker model: {settings.reranker_model}...")

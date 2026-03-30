@@ -15,7 +15,6 @@ from core.rag_pipeline import (
     generate_quiz_tf,
     concept_breakdown,
 )
-from core.hybrid_retriever import RetrievalConfig, RetrievalMode
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -38,14 +37,6 @@ class TopicRequest(BaseModel):
     retrieval_mode: str = "hybrid"
 
 
-
-def _get_config(mode_str: str) -> RetrievalConfig:
-    mode_map = {
-        "hybrid": RetrievalMode.HYBRID,
-        "sparse": RetrievalMode.SPARSE,
-        "dense": RetrievalMode.DENSE,
-    }
-    return RetrievalConfig(mode=mode_map.get(mode_str, RetrievalMode.HYBRID))
 
 
 # ── Conversational endpoint (Q&A, Explain, Teach Back) ──

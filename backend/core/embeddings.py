@@ -1,13 +1,20 @@
-"""Local embedding generation using sentence-transformers (100% free)."""
+"""Local embedding generation using sentence-transformers (100% free).
 
-from sentence_transformers import SentenceTransformer
-from config import settings
+Only loads when LIGHTWEIGHT_MODE is not enabled.
+"""
 
-# Load model once at module level (cached in memory)
+import os
+
+LIGHTWEIGHT = os.environ.get("LIGHTWEIGHT_MODE", "false").lower() == "true"
+
 _model = None
 
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model():
+    if LIGHTWEIGHT:
+        raise RuntimeError("Embeddings not available in lightweight mode")
+    from sentence_transformers import SentenceTransformer
+    from config import settings
     global _model
     if _model is None:
         print(f"Loading embedding model: {settings.embedding_model}...")
@@ -17,12 +24,10 @@ def get_embedding_model() -> SentenceTransformer:
 
 
 def generate_embeddings(texts: list[str]) -> list[list[float]]:
-    """Generate embeddings for a list of text strings."""
     model = get_embedding_model()
     embeddings = model.encode(texts, show_progress_bar=False, normalize_embeddings=True)
     return embeddings.tolist()
 
 
 def generate_single_embedding(text: str) -> list[float]:
-    """Generate embedding for a single text string."""
     return generate_embeddings([text])[0]

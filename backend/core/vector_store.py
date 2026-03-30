@@ -1,14 +1,21 @@
-"""ChromaDB vector store operations — persistent, local, free."""
+"""ChromaDB vector store operations — persistent, local, free.
 
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+Only loads heavy imports when LIGHTWEIGHT_MODE is not enabled.
+"""
+
+import os
 from config import settings
 
-# Initialize persistent ChromaDB client
+LIGHTWEIGHT = os.environ.get("LIGHTWEIGHT_MODE", "false").lower() == "true"
+
 _client = None
 
 
-def get_chroma_client() -> chromadb.ClientAPI:
+def get_chroma_client():
+    if LIGHTWEIGHT:
+        raise RuntimeError("ChromaDB not available in lightweight mode")
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
     global _client
     if _client is None:
         _client = chromadb.PersistentClient(
@@ -18,7 +25,7 @@ def get_chroma_client() -> chromadb.ClientAPI:
     return _client
 
 
-def get_collection(user_id: int) -> chromadb.Collection:
+def get_collection(user_id: int):
     """Each user gets their own ChromaDB collection for isolation."""
     client = get_chroma_client()
     return client.get_or_create_collection(
@@ -66,9 +73,7 @@ def search_chunks(
 def delete_document_chunks(user_id: int, document_id: int):
     """Remove all chunks for a specific document from the vector store."""
     collection = get_collection(user_id)
-    # ChromaDB supports filtering by metadata
     try:
-        # Get all chunk IDs for this document
         results = collection.get(
             where={"document_id": document_id},
             include=[],
@@ -76,5 +81,4 @@ def delete_document_chunks(user_id: int, document_id: int):
         if results["ids"]:
             collection.delete(ids=results["ids"])
     except Exception:
-        # If filtering fails, we'll handle gracefully
         pass
