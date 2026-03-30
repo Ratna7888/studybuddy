@@ -30,7 +30,6 @@ def parse_document(file_path: str, file_type: str) -> str:
 
 
 def _parse_pdf(path: Path) -> str:
-    """Extract text from PDF using PyMuPDF."""
     doc = fitz.open(str(path))
     pages = []
     for page_num, page in enumerate(doc):
@@ -42,14 +41,12 @@ def _parse_pdf(path: Path) -> str:
 
 
 def _parse_docx(path: Path) -> str:
-    """Extract text from DOCX."""
     doc = DocxDocument(str(path))
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
     return "\n\n".join(paragraphs)
 
 
 def _parse_text(path: Path) -> str:
-    """Read plain text / markdown files."""
     import chardet
     raw = path.read_bytes()
     detected = chardet.detect(raw)
@@ -63,15 +60,13 @@ async def process_document(
     document_id: int,
     document_title: str,
     user_id: int,
-) -> list[ChunkData]:
+) -> tuple:
     """
     Full processing pipeline:
-    1. Parse document → raw text
-    2. Chunk text → smart segments
-    3. Generate embeddings (local)
-    4. Store in ChromaDB
-    
-    Returns the list of chunks created.
+    1. Parse document -> raw text
+    2. Chunk text -> smart segments
+    3. Generate IDs and metadata
+    4. Store in BM25 (always) and optionally in ChromaDB + embeddings
     """
     # Step 1: Parse
     raw_text = parse_document(file_path, file_type)
@@ -83,7 +78,7 @@ async def process_document(
     if not chunks:
         raise ValueError("No meaningful chunks could be extracted.")
 
-    # Step 3: Generate chunk IDs and metadata
+    # Step 3: Prepare IDs and metadata
     chunk_texts = [c.text for c in chunks]
     chroma_ids = []
     metadatas = []
@@ -94,19 +89,14 @@ async def process_document(
         chunk.metadata["chroma_id"] = cid
         metadatas.append(chunk.metadata)
 
-    # Step 5: Store in indexes
-    if LIGHTWEIGHT:
-        from core.sparse_retriever import add_to_bm25
-        add_to_bm25(user_id=user_id, ids=chroma_ids, texts=chunk_texts, metadatas=metadatas)
-    else:
+    # Step 4: Store in indexes
+    from core.sparse_retriever import add_to_bm25
+    add_to_bm25(user_id=user_id, ids=chroma_ids, texts=chunk_texts, metadatas=metadatas)
+
+    if not LIGHTWEIGHT:
         from core.embeddings import generate_embeddings
         from core.vector_store import add_chunks
-        from core.sparse_retriever import add_to_bm25
-
-        # Dense index
         embeddings = generate_embeddings(chunk_texts)
         add_chunks(user_id=user_id, ids=chroma_ids, texts=chunk_texts, embeddings=embeddings, metadatas=metadatas)
-        # Sparse index
-        add_to_bm25(user_id=user_id, ids=chroma_ids, texts=chunk_texts, metadatas=metadatas)
 
     return chunks, chroma_ids
