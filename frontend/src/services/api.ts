@@ -1,9 +1,14 @@
 import axios from "axios";
 
-// In production (Vercel), /api rewrites to Render backend
+// In production, call Render backend directly
 // In dev, Vite proxy handles /api -> localhost:8000
+const isProd = window.location.hostname !== "localhost";
+const BASE_URL = isProd
+  ? "https://studybuddy-api-1egc.onrender.com/api"  
+  : "/api";
+
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
 });
 

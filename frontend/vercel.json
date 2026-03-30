@@ -1,12 +1,9 @@
+
 {
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "http://studybuddy-gamma-virid.vercel.app/api/$1"
-    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
