@@ -304,8 +304,8 @@ async def generate_summary(user_id: int, topic: str) -> RAGResult:
 # Flashcard Generation
 # ────────────────────────────────────────────
 
-async def generate_flashcards(user_id: int, topic: str, count: int = 5) -> dict:
-    chunks = _retrieve_with_fallback(user_id, topic)
+async def generate_flashcards(user_id: int, topic: str, count: int = 5, doc_ids: list[int] = None) -> dict:
+    chunks = _retrieve_with_fallback(user_id, topic, doc_ids=doc_ids)
     if not chunks:
         return {"flashcards": [], "sources": [], "error": NO_RELEVANCE_MSG}
 
@@ -331,8 +331,8 @@ async def generate_flashcards(user_id: int, topic: str, count: int = 5) -> dict:
 # Quiz Generation (MCQ)
 # ────────────────────────────────────────────
 
-async def generate_quiz_mcq(user_id: int, topic: str, count: int = 5) -> dict:
-    chunks = _retrieve_with_fallback(user_id, topic)
+async def generate_quiz_mcq(user_id: int, topic: str, count: int = 5, doc_ids: list[int] = None) -> dict:
+    chunks = _retrieve_with_fallback(user_id, topic, doc_ids=doc_ids)
     if not chunks:
         return {"questions": [], "sources": [], "error": NO_RELEVANCE_MSG}
 
@@ -359,8 +359,8 @@ async def generate_quiz_mcq(user_id: int, topic: str, count: int = 5) -> dict:
 # Quiz Generation (True/False)
 # ────────────────────────────────────────────
 
-async def generate_quiz_tf(user_id: int, topic: str, count: int = 5) -> dict:
-    chunks = _retrieve_with_fallback(user_id, topic)
+async def generate_quiz_tf(user_id: int, topic: str, count: int = 5, doc_ids: list[int] = None) -> dict:
+    chunks = _retrieve_with_fallback(user_id, topic, doc_ids=doc_ids)
     if not chunks:
         return {"questions": [], "sources": [], "error": NO_RELEVANCE_MSG}
 

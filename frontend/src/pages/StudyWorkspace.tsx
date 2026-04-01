@@ -29,14 +29,31 @@ export default function StudyWorkspace() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Chat
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  // Chat — persist in localStorage
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    try { return JSON.parse(localStorage.getItem("chat_sessions") || "[]"); } catch { return []; }
+  });
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
+    return localStorage.getItem("active_session_id") || null;
+  });
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Tool sessions history
-  const [toolSessions, setToolSessions] = useState<ToolSession[]>([]);
+  // Tool sessions history — persist in localStorage
+  const [toolSessions, setToolSessions] = useState<ToolSession[]>(() => {
+    try { return JSON.parse(localStorage.getItem("tool_sessions") || "[]"); } catch { return []; }
+  });
   const [activeToolSessionId, setActiveToolSessionId] = useState<string | null>(null);
+
+  // Save to localStorage whenever sessions change
+  useEffect(() => {
+    localStorage.setItem("chat_sessions", JSON.stringify(sessions));
+  }, [sessions]);
+  useEffect(() => {
+    localStorage.setItem("active_session_id", activeSessionId || "");
+  }, [activeSessionId]);
+  useEffect(() => {
+    localStorage.setItem("tool_sessions", JSON.stringify(toolSessions));
+  }, [toolSessions]);
 
   // Study tools
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
@@ -149,7 +166,7 @@ export default function StudyWorkspace() {
 
       try {
         const history = updated.map(m => ({ role: m.role, content: m.content }));
-        const { data } = await chatAPI.converse(query, history, "qa");
+        const { data } = await chatAPI.converse(query, history, "qa", Array.from(selectedDocIds));
         const aMsg: ChatMessage = { role: "assistant", content: data.answer, sources: data.sources, confidence: data.confidence };
         updateSession(sid, { messages: [...updated, aMsg], sources: data.sources || [] });
         setSources(data.sources || []);
@@ -166,7 +183,7 @@ export default function StudyWorkspace() {
         let data: any;
         switch (view) {
           case "flashcards":
-            data = (await chatAPI.flashcards(query, 5)).data;
+            data = (await chatAPI.flashcards(query, 5, Array.from(selectedDocIds))).data;
             data.error ? setToolError(data.error) : setFlashcards(data.flashcards || []);
             setSources(data.sources || []);
             if (!data.error && data.flashcards?.length) {
@@ -179,7 +196,7 @@ export default function StudyWorkspace() {
             }
             break;
           case "quiz_mcq":
-            data = (await chatAPI.quizMCQ(query, 5)).data;
+            data = (await chatAPI.quizMCQ(query, 5, Array.from(selectedDocIds))).data;
             data.error ? setToolError(data.error) : setQuizQuestions(data.questions || []);
             setSources(data.sources || []);
             if (!data.error && data.questions?.length) {
@@ -191,7 +208,7 @@ export default function StudyWorkspace() {
             }
             break;
           case "quiz_tf":
-            data = (await chatAPI.quizTF(query, 5)).data;
+            data = (await chatAPI.quizTF(query, 5, Array.from(selectedDocIds))).data;
             data.error ? setToolError(data.error) : setQuizQuestions(data.questions || []);
             setSources(data.sources || []);
             if (!data.error && data.questions?.length) {
@@ -203,7 +220,7 @@ export default function StudyWorkspace() {
             }
             break;
           case "concept_breakdown":
-            data = (await chatAPI.conceptBreakdown(query)).data;
+            data = (await chatAPI.conceptBreakdown(query, Array.from(selectedDocIds))).data;
             data.error ? setToolError(data.error) : setConceptData(data);
             setSources(data.sources || []);
             if (!data.error && !data.error) {

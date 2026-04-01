@@ -22,52 +22,55 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 class QuestionRequest(BaseModel):
     question: str
+    doc_ids: list[int] = []
 
 class ConversationRequest(BaseModel):
     question: str
     history: list[dict] = []
     mode: str = "qa"
+    doc_ids: list[int] = []
 
 class TopicRequest(BaseModel):
     topic: str
     count: int = 5
+    doc_ids: list[int] = []
 
 
 @router.post("/converse")
 async def converse(req: ConversationRequest, user: User = Depends(get_current_user)):
     result = await ask_conversational(
-        user_id=user.id, question=req.question, history=req.history, mode=req.mode,
+        user_id=user.id, question=req.question, history=req.history, mode=req.mode, doc_ids=req.doc_ids,
     )
     return {"answer": result.answer, "sources": result.sources, "confidence": result.confidence, "mode": result.mode, "retrieval_info": result.retrieval_info}
 
 
 @router.post("/ask")
 async def ask(req: QuestionRequest, user: User = Depends(get_current_user)):
-    result = await ask_question(user.id, req.question)
+    result = await ask_question(user.id, req.question, doc_ids=req.doc_ids)
     return {"answer": result.answer, "sources": result.sources, "confidence": result.confidence, "mode": result.mode, "retrieval_info": result.retrieval_info}
 
 
 @router.post("/summarize")
 async def summarize(req: QuestionRequest, user: User = Depends(get_current_user)):
-    result = await generate_summary(user.id, req.question)
+    result = await generate_summary(user.id, req.question, doc_ids=req.doc_ids)
     return {"answer": result.answer, "sources": result.sources, "confidence": result.confidence, "mode": result.mode, "retrieval_info": result.retrieval_info}
 
 
 @router.post("/flashcards")
 async def flashcards(req: TopicRequest, user: User = Depends(get_current_user)):
-    return await generate_flashcards(user.id, req.topic, req.count)
+    return await generate_flashcards(user.id, req.topic, req.count, doc_ids=req.doc_ids)
 
 
 @router.post("/quiz/mcq")
 async def quiz_mcq(req: TopicRequest, user: User = Depends(get_current_user)):
-    return await generate_quiz_mcq(user.id, req.topic, req.count)
+    return await generate_quiz_mcq(user.id, req.topic, req.count, doc_ids=req.doc_ids)
 
 
 @router.post("/quiz/tf")
 async def quiz_tf(req: TopicRequest, user: User = Depends(get_current_user)):
-    return await generate_quiz_tf(user.id, req.topic, req.count)
+    return await generate_quiz_tf(user.id, req.topic, req.count, doc_ids=req.doc_ids)
 
 
 @router.post("/concept-breakdown")
 async def concept_map(req: QuestionRequest, user: User = Depends(get_current_user)):
-    return await concept_breakdown(user.id, req.question)
+    return await concept_breakdown(user.id, req.question, doc_ids=req.doc_ids)
