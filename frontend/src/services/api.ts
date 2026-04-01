@@ -4,7 +4,7 @@ import axios from "axios";
 // In dev, Vite proxy handles /api -> localhost:8000
 const isProd = window.location.hostname !== "localhost";
 const BASE_URL = isProd
-  ? "https://studybuddy-api-uy9l.onrender.com/api"  // ← Replace with YOUR Render URL
+  ? "https://studybuddy-api-1egc.onrender.com/api"  
   : "/api";
 
 const api = axios.create({
@@ -59,20 +59,21 @@ export const documentsAPI = {
 
 // ── Chat / Tutor ──
 export const chatAPI = {
-  converse: (question: string, history: { role: string; content: string }[], mode: string, doc_ids: number[] = []) =>
-    api.post("/chat/converse", { question, history, mode, doc_ids }),
-  ask: (question: string, doc_ids: number[] = []) =>
-    api.post("/chat/ask", { question, doc_ids }),
-  summarize: (question: string, doc_ids: number[] = []) =>
-    api.post("/chat/summarize", { question, doc_ids }),
-  flashcards: (topic: string, count = 5, doc_ids: number[] = []) =>
-    api.post("/chat/flashcards", { topic, count, doc_ids }),
-  quizMCQ: (topic: string, count = 5, doc_ids: number[] = []) =>
-    api.post("/chat/quiz/mcq", { topic, count, doc_ids }),
-  quizTF: (topic: string, count = 5, doc_ids: number[] = []) =>
-    api.post("/chat/quiz/tf", { topic, count, doc_ids }),
-  conceptBreakdown: (question: string, doc_ids: number[] = []) =>
-    api.post("/chat/concept-breakdown", { question, doc_ids }),
+  converse: (question: string, history: { role: string; content: string }[], mode: string) =>
+    api.post("/chat/converse", { question, history, mode }),
+  ask: (question: string) => api.post("/chat/ask", { question }),
+  explain: (question: string) => api.post("/chat/explain", { question }),
+  summarize: (question: string) => api.post("/chat/summarize", { question }),
+  flashcards: (topic: string, count = 5) =>
+    api.post("/chat/flashcards", { topic, count }),
+  quizMCQ: (topic: string, count = 5) =>
+    api.post("/chat/quiz/mcq", { topic, count }),
+  quizTF: (topic: string, count = 5) =>
+    api.post("/chat/quiz/tf", { topic, count }),
+  teachBack: (topic: string, explanation: string) =>
+    api.post("/chat/teach-back", { topic, explanation }),
+  conceptBreakdown: (question: string) =>
+    api.post("/chat/concept-breakdown", { question }),
 };
 
 // ── Progress ──

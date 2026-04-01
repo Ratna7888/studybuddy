@@ -135,15 +135,10 @@ def add_to_bm25(
     index.add_chunks(ids, texts, metadatas)
 
 
-def search_bm25(user_id: int, query: str, top_k: int = 10, doc_ids: list[int] = None) -> list[dict]:
-    """Sparse retrieval: BM25 keyword search. Optionally filter by document IDs."""
+def search_bm25(user_id: int, query: str, top_k: int = 10) -> list[dict]:
+    """Sparse retrieval: BM25 keyword search."""
     index = get_user_index(user_id)
-    results = index.search(query, top_k=top_k * 3 if doc_ids else top_k)  # fetch more if filtering
-
-    if doc_ids:
-        results = [r for r in results if r.get("metadata", {}).get("document_id") in doc_ids]
-
-    return results[:top_k]
+    return index.search(query, top_k)
 
 
 def remove_document_from_bm25(user_id: int, document_id: int):
