@@ -13,9 +13,6 @@ Architecture:
               ▼
           Context Assembly ──► Gemini LLM ──► Grounded Answer
 """
-"""
-Full RAG Pipeline with Hybrid Retrieval.
-"""
 
 import json
 import os
@@ -25,6 +22,12 @@ LIGHTWEIGHT = os.environ.get("LIGHTWEIGHT_MODE", "false").lower() == "true"
 
 if LIGHTWEIGHT:
     from core.sparse_retriever import search_bm25
+else:
+    from core.hybrid_retriever import (
+        hybrid_retrieve,
+        RetrievalConfig,
+        RetrievalMode,
+    )
 
 from core.llm import (
     generate_answer,
@@ -49,6 +52,18 @@ class RAGResult:
     retrieval_info: dict  # metadata about retrieval strategy used
 
 
+# Default hybrid config (only used when not lightweight)
+if not LIGHTWEIGHT:
+    HYBRID_CONFIG = RetrievalConfig(
+        mode=RetrievalMode.HYBRID,
+        sparse_top_k=15, dense_top_k=15,
+        fusion_top_k=10, final_top_k=5,
+        use_reranker=True, rrf_k=60, fusion_method="rrf",
+    )
+else:
+    # Dummy so code doesn't crash on references
+    HYBRID_CONFIG = None
+    RetrievalConfig = None
 
 
 # ────────────────────────────────────────────
@@ -56,17 +71,11 @@ class RAGResult:
 # ────────────────────────────────────────────
 
 def retrieve_context(user_id: int, query: str, config=None) -> list[dict]:
+    """Retrieve chunks — BM25-only in production, hybrid locally."""
     if LIGHTWEIGHT:
         return search_bm25(user_id, query, top_k=5)
     else:
-        from core.hybrid_retriever import hybrid_retrieve, RetrievalConfig, RetrievalMode
-        if config is None:
-            config = RetrievalConfig(
-                mode=RetrievalMode.HYBRID,
-                sparse_top_k=15, dense_top_k=15,
-                fusion_top_k=10, final_top_k=5,
-                use_reranker=True, rrf_k=60, fusion_method="rrf",
-            )
+        config = config or HYBRID_CONFIG
         return hybrid_retrieve(user_id, query, config)
 
 
@@ -163,13 +172,14 @@ async def ask_conversational(
     question: str,
     history: list[dict],
     mode: str = "qa",
-    config = None,
+    config: RetrievalConfig = None,
 ) -> RAGResult:
     """
     Multi-turn conversational RAG.
     Retrieves context based on the latest question,
     then includes conversation history in the prompt.
     """
+    config = config or HYBRID_CONFIG
     chunks = retrieve_context(user_id, question, config)
 
     if not chunks or not _chunks_are_relevant(chunks, question):
@@ -264,7 +274,7 @@ async def explain_simply(user_id: int, topic: str) -> RAGResult:
         sources=format_sources(chunks),
         confidence=_calc_confidence(chunks),
         mode="explain",
-        retrieval_info=_build_retrieval_info(chunks),
+        retrieval_info=_build_retrieval_info(chunks, HYBRID_CONFIG),
     )
 
 
@@ -286,7 +296,7 @@ async def generate_summary(user_id: int, topic: str) -> RAGResult:
         sources=format_sources(chunks),
         confidence=_calc_confidence(chunks),
         mode="summary",
-        retrieval_info=_build_retrieval_info(chunks),
+        retrieval_info=_build_retrieval_info(chunks, HYBRID_CONFIG),
     )
 
 
@@ -296,7 +306,7 @@ async def generate_summary(user_id: int, topic: str) -> RAGResult:
 
 async def generate_flashcards(user_id: int, topic: str, count: int = 5) -> dict:
     chunks = retrieve_context(user_id, topic)
-    if not chunks or not _chunks_are_relevant(chunks, topic):
+    if not chunks:
         return {"flashcards": [], "sources": [], "error": NO_RELEVANCE_MSG}
 
     context = build_context_prompt(chunks)
@@ -313,7 +323,7 @@ async def generate_flashcards(user_id: int, topic: str, count: int = 5) -> dict:
     return {
         "flashcards": flashcards,
         "sources": format_sources(chunks),
-        "retrieval_info": _build_retrieval_info(chunks),
+        "retrieval_info": _build_retrieval_info(chunks, HYBRID_CONFIG),
     }
 
 
@@ -323,7 +333,7 @@ async def generate_flashcards(user_id: int, topic: str, count: int = 5) -> dict:
 
 async def generate_quiz_mcq(user_id: int, topic: str, count: int = 5) -> dict:
     chunks = retrieve_context(user_id, topic)
-    if not chunks or not _chunks_are_relevant(chunks, topic):
+    if not chunks:
         return {"questions": [], "sources": [], "error": NO_RELEVANCE_MSG}
 
     context = build_context_prompt(chunks)
@@ -341,7 +351,7 @@ async def generate_quiz_mcq(user_id: int, topic: str, count: int = 5) -> dict:
         "questions": questions,
         "sources": format_sources(chunks),
         "mode": "mcq",
-        "retrieval_info": _build_retrieval_info(chunks),
+        "retrieval_info": _build_retrieval_info(chunks, HYBRID_CONFIG),
     }
 
 
@@ -351,7 +361,7 @@ async def generate_quiz_mcq(user_id: int, topic: str, count: int = 5) -> dict:
 
 async def generate_quiz_tf(user_id: int, topic: str, count: int = 5) -> dict:
     chunks = retrieve_context(user_id, topic)
-    if not chunks or not _chunks_are_relevant(chunks, topic):
+    if not chunks:
         return {"questions": [], "sources": [], "error": NO_RELEVANCE_MSG}
 
     context = build_context_prompt(chunks)
@@ -369,8 +379,58 @@ async def generate_quiz_tf(user_id: int, topic: str, count: int = 5) -> dict:
         "questions": questions,
         "sources": format_sources(chunks),
         "mode": "tf",
-        "retrieval_info": _build_retrieval_info(chunks),
+        "retrieval_info": _build_retrieval_info(chunks, HYBRID_CONFIG),
     }
+
+
+# ────────────────────────────────────────────
+# Socratic Mode
+# ────────────────────────────────────────────
+
+async def socratic_question(user_id: int, topic: str) -> RAGResult:
+    chunks = retrieve_context(user_id, topic)
+    if not chunks or not _chunks_are_relevant(chunks):
+        return _no_context_result("socratic")
+
+    context = build_context_prompt(chunks)
+    prompt = f"CONTEXT:\n{context}\n\nTOPIC:\n{topic}"
+    answer = await generate_answer(SOCRATIC_PROMPT, prompt)
+
+    return RAGResult(
+        answer=answer,
+        sources=format_sources(chunks),
+        confidence=_calc_confidence(chunks),
+        mode="socratic",
+        retrieval_info=_build_retrieval_info(chunks, HYBRID_CONFIG),
+    )
+
+
+# ────────────────────────────────────────────
+# Teach-Back Evaluation
+# ────────────────────────────────────────────
+
+async def evaluate_teach_back(
+    user_id: int, topic: str, student_explanation: str
+) -> RAGResult:
+    chunks = retrieve_context(user_id, topic)
+    if not chunks:
+        return _no_context_result("teach_back")
+
+    context = build_context_prompt(chunks)
+    prompt = (
+        f"CONTEXT:\n{context}\n\n"
+        f"TOPIC: {topic}\n\n"
+        f"STUDENT'S EXPLANATION:\n{student_explanation}"
+    )
+    answer = await generate_answer(TEACH_BACK_PROMPT, prompt)
+
+    return RAGResult(
+        answer=answer,
+        sources=format_sources(chunks),
+        confidence=_calc_confidence(chunks),
+        mode="teach_back",
+        retrieval_info=_build_retrieval_info(chunks, HYBRID_CONFIG),
+    )
 
 
 # ────────────────────────────────────────────
@@ -393,7 +453,7 @@ async def concept_breakdown(user_id: int, topic: str) -> dict:
         breakdown = {"raw": raw}
 
     breakdown["sources"] = format_sources(chunks)
-    breakdown["retrieval_info"] = _build_retrieval_info(chunks)
+    breakdown["retrieval_info"] = _build_retrieval_info(chunks, HYBRID_CONFIG)
     return breakdown
 
 
