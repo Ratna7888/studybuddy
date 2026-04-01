@@ -305,7 +305,7 @@ async def generate_summary(user_id: int, topic: str) -> RAGResult:
 # ────────────────────────────────────────────
 
 async def generate_flashcards(user_id: int, topic: str, count: int = 5) -> dict:
-    chunks = retrieve_context(user_id, topic)
+    chunks = _retrieve_with_fallback(user_id, topic)
     if not chunks:
         return {"flashcards": [], "sources": [], "error": NO_RELEVANCE_MSG}
 
@@ -332,7 +332,7 @@ async def generate_flashcards(user_id: int, topic: str, count: int = 5) -> dict:
 # ────────────────────────────────────────────
 
 async def generate_quiz_mcq(user_id: int, topic: str, count: int = 5) -> dict:
-    chunks = retrieve_context(user_id, topic)
+    chunks = _retrieve_with_fallback(user_id, topic)
     if not chunks:
         return {"questions": [], "sources": [], "error": NO_RELEVANCE_MSG}
 
@@ -360,7 +360,7 @@ async def generate_quiz_mcq(user_id: int, topic: str, count: int = 5) -> dict:
 # ────────────────────────────────────────────
 
 async def generate_quiz_tf(user_id: int, topic: str, count: int = 5) -> dict:
-    chunks = retrieve_context(user_id, topic)
+    chunks = _retrieve_with_fallback(user_id, topic)
     if not chunks:
         return {"questions": [], "sources": [], "error": NO_RELEVANCE_MSG}
 
@@ -471,12 +471,31 @@ def _no_context_result(mode: str) -> RAGResult:
     )
 
 
-def _chunks_are_relevant(chunks: list[dict], query: str = "", threshold: float = -1.0) -> bool:
+def _retrieve_with_fallback(user_id: int, query: str) -> list[dict]:
     """
-    If chunks were retrieved, they are relevant enough.
-    The LLM system prompt is the real grounding enforcer.
+    Retrieve chunks with fallback for broad/generic queries.
+    If BM25 keyword search returns nothing, fall back to returning
+    the first few chunks from the user's documents.
     """
-    return len(chunks) > 0
+    chunks = retrieve_context(user_id, query)
+
+    # Try broader search
+    if not chunks and len(query.split()) > 2:
+        broader = " ".join(query.split()[:3])
+        chunks = retrieve_context(user_id, broader)
+
+    # Final fallback: return any chunks for this user
+    if not chunks:
+        if LIGHTWEIGHT:
+            from core.sparse_retriever import get_user_index
+            idx = get_user_index(user_id)
+            if idx.chunk_texts:
+                chunks = [
+                    {"id": idx.chunk_ids[i], "text": idx.chunk_texts[i], "metadata": idx.chunk_metadatas[i], "bm25_score": 1.0}
+                    for i in range(min(5, len(idx.chunk_texts)))
+                ]
+
+    return chunks
 
 
 NO_RELEVANCE_MSG = "I cannot answer this from the provided study material. The uploaded documents do not contain relevant information on this topic."
