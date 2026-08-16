@@ -180,9 +180,9 @@ async def ask_conversational(
     then includes conversation history in the prompt.
     """
     config = config or HYBRID_CONFIG
-    chunks = retrieve_context(user_id, question, config)
+    chunks = _retrieve_with_fallback(user_id, question)
 
-    if not chunks or not _chunks_are_relevant(chunks, question):
+    if not chunks:
         return _no_context_result(mode)
 
     context = build_context_prompt(chunks)
@@ -223,9 +223,9 @@ async def ask_question(
     config=None,
 ) -> RAGResult:
     """Direct Q&A with RAG grounding."""
-    chunks = retrieve_context(user_id, question, config)
+    chunks = _retrieve_with_fallback(user_id, question)
 
-    if not chunks or not _chunks_are_relevant(chunks, question):
+    if not chunks:
         return RAGResult(
             answer="I cannot answer this from the provided study material. No relevant content was found in your uploaded documents.",
             sources=[],
@@ -261,8 +261,8 @@ async def ask_question(
 # ────────────────────────────────────────────
 
 async def explain_simply(user_id: int, topic: str) -> RAGResult:
-    chunks = retrieve_context(user_id, topic)
-    if not chunks or not _chunks_are_relevant(chunks, topic):
+    chunks = _retrieve_with_fallback(user_id, topic)
+    if not chunks:
         return _no_context_result("explain")
 
     context = build_context_prompt(chunks)
@@ -283,8 +283,8 @@ async def explain_simply(user_id: int, topic: str) -> RAGResult:
 # ────────────────────────────────────────────
 
 async def generate_summary(user_id: int, topic: str) -> RAGResult:
-    chunks = retrieve_context(user_id, topic)
-    if not chunks or not _chunks_are_relevant(chunks):
+    chunks = _retrieve_with_fallback(user_id, topic)
+    if not chunks:
         return _no_context_result("summary")
 
     context = build_context_prompt(chunks)
@@ -388,8 +388,8 @@ async def generate_quiz_tf(user_id: int, topic: str, count: int = 5) -> dict:
 # ────────────────────────────────────────────
 
 async def socratic_question(user_id: int, topic: str) -> RAGResult:
-    chunks = retrieve_context(user_id, topic)
-    if not chunks or not _chunks_are_relevant(chunks):
+    chunks = _retrieve_with_fallback(user_id, topic)
+    if not chunks:
         return _no_context_result("socratic")
 
     context = build_context_prompt(chunks)
@@ -438,8 +438,8 @@ async def evaluate_teach_back(
 # ────────────────────────────────────────────
 
 async def concept_breakdown(user_id: int, topic: str) -> dict:
-    chunks = retrieve_context(user_id, topic)
-    if not chunks or not _chunks_are_relevant(chunks):
+    chunks = _retrieve_with_fallback(user_id, topic)
+    if not chunks:
         return {"error": NO_RELEVANCE_MSG}
 
     context = build_context_prompt(chunks)
